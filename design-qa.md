@@ -8,6 +8,8 @@
   - `C:/Users/User/AppData/Local/Temp/codex-clipboard-d3273541-b522-47c8-bad4-745a1601b50d.png` — 1238×708
 - Implementation: `http://127.0.0.1:8765/index.html`
 - Implementation screenshot: `qa-screenshots/2026-08-12-kmeans-redesign-desktop.png` — 1265×712 image pixels, 1280×720 CSS viewport, device scale 1
+- Published implementation: `https://wbmaker2.github.io/k-means-simulator/`
+- Published screenshot: `qa-screenshots/2026-08-12-kmeans-redesign-pages.png` — 1265×712 image pixels, 1280×720 CSS viewport, device scale 1
 - Combined comparison evidence: `qa-screenshots/2026-08-12-design-comparison.png`
 - State: initial simulator state after page load; K=3; public bicycle theme; center candidates visible; no comparison results yet.
 - Normalization: source and implementation were resized to equal comparison-column widths in the combined evidence image. The source is a before-state reference rather than a visual style to reproduce; intentional redesign differences are recorded below.
@@ -47,6 +49,7 @@ The baseline shows browser-default typography, controls, and spacing with no vis
 - K comparison renders five rows for K=2, K=3, K=4, K=5, K=6 and hides the empty state.
 - Desktop overflow check: `document.scrollWidth=1265`, `body.scrollWidth=1265`, viewport width `1280`.
 - No visible runtime error occurred during the interaction checks.
+- GitHub Pages root opened `index.html` after the deployment propagated; the published screenshot shows the local CSS and SVG icon assets applied.
 
 ## Required fidelity surfaces
 
