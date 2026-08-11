@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K-Means 우리 동네 좋은 시설 위치 찾기 (엔트리 연계)</title>
+    <!-- Local visual assets keep the lesson usable when network access is blocked. -->
+    <link rel="stylesheet" href="assets/kmeans-simulator.css">
+    <script src="assets/kmeans-icons.js" defer></script>
+    <style>
+        .grid-line {
+            stroke: #e2e8f0;
+            stroke-width: 1;
+        }
+        .axis-line {
+            stroke: #94a3b8;
+            stroke-width: 1.5;
+            stroke-dasharray: 4;
+        }
+        .transition-all-custom {
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        button:focus-visible,
+        input:focus-visible,
+        [tabindex]:focus-visible {
+            outline: 3px solid #f59e0b;
+            outline-offset: 2px;
+        }
+    </style>
+</head>
+<body class="site-shell bg-slate-50 min-h-screen text-slate-800">
+
+    <!-- Header -->
+    <header class="site-header bg-white border-b border-slate-200 py-4 px-6 sticky top-0 z-10 shadow-sm">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="brand-mark bg-indigo-600 p-2 rounded-lg text-white" aria-hidden="true">
+                    <i data-lucide="map-pin" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <span class="eyebrow">우리 동네 AI 탐험</span>
+                    <h1 class="text-xl font-bold text-slate-900">우리 동네 시설 위치를 찾아요</h1>
+                    <p class="text-xs text-slate-500">가까운 장소끼리 묶고, 각 모둠의 가운데로 중심을 옮겨 보는 K-means 학습 도구</p>
+                </div>
+            </div>
+            <!-- Theme Selector -->
+            <div class="theme-selector flex bg-slate-100 p-1 rounded-xl border border-slate-200" role="group" aria-label="탐험 주제 선택">
+                <button onclick="changeTheme('bike')" id="btn-theme-bike" aria-pressed="true" class="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all bg-white text-indigo-700 shadow-sm">
+                    <i data-lucide="bike" class="w-4 h-4"></i>공공자전거
+                </button>
+                <button onclick="changeTheme('shelter')" id="btn-theme-shelter" aria-pressed="false" class="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all text-slate-600 hover:text-slate-900">
+                    <i data-lucide="sun" class="w-4 h-4"></i>무더위 쉼터
+                </button>
+                <button onclick="changeTheme('recycle')" id="btn-theme-recycle" aria-pressed="false" class="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all text-slate-600 hover:text-slate-900">
+                    <i data-lucide="leaf" class="w-4 h-4"></i>무인 회수기
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="page-frame learning-layout max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Left Side: Controls & Entry Guide -->
+        <div class="control-panel lg:col-span-4 flex flex-col gap-6">
+            
+            <!-- Parameters Control Box -->
+            <div class="panel-card bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                <h2 class="text-base font-bold text-slate-900 mb-4 flex items-center gap-2 border-b pb-2">
+                    <i data-lucide="sliders" class="w-4 h-4 text-indigo-600"></i>
+                    학습 매개변수 설정
+                </h2>
+
+                <div id="learning-mission" class="mission-hero learning-mission" aria-describedby="learning-mission-copy">
+                    <span class="learning-mission-badge" aria-hidden="true">1</span>
+                    <div>
+                        <span class="mission-kicker">오늘의 미션</span>
+                        <h3>오늘의 미션: 점들이 어떻게 모이는지 관찰해요</h3>
+                        <p id="learning-mission-copy">K값을 정하고 <strong>한 단계씩 실행</strong>을 눌러 가까운 점끼리 모이는 모습을 살펴보세요.</p>
+                    </div>
+                </div>
+                
+                <!-- Theme Description Card -->
+                <div id="theme-desc" class="p-3 bg-indigo-50 rounded-xl mb-4 border border-indigo-100">
+                    <h3 class="text-sm font-bold text-indigo-900 flex items-center gap-1.5">
+                        <i data-lucide="bike" class="w-4 h-4"></i> 자전거 대여소 찾기 (K-SDGs 11)
+                    </h3>
+                    <p class="text-xs text-indigo-700 mt-1 leading-relaxed">
+                        주민들이 통학이나 출퇴근 시 친환경 자전거를 쉽게 빌릴 수 있는 좋은 후보 위치 3~5곳을 데이터로 찾아 봅니다.
+                    </p>
+                </div>
+
+                <!-- K-Value Controller -->
+                <div class="k-control mb-5">
+                    <label for="input-k" class="block text-xs font-bold text-slate-700 mb-2 flex justify-between">
+                        <span>놓고 싶은 시설의 개수 (K값)</span>
+                        <span id="k-value-display" class="text-indigo-600 font-extrabold text-sm">3개</span>
+                    </label>
+                    <div class="flex items-center gap-3">
+                        <input type="number" id="input-k" min="2" max="6" value="3" aria-label="놓고 싶은 시설의 개수" onchange="updateK(this.value)" class="w-16 px-2 py-1.5 text-center font-bold text-slate-800 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <input type="range" id="slider-k" min="2" max="6" value="3" aria-label="K값 슬라이더" aria-valuemin="2" aria-valuemax="6" aria-valuenow="3" oninput="updateK(this.value)" class="flex-1 accent-indigo-600 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                    </div>
+                    <p class="text-xs text-slate-500 mt-1.5">K값은 시설을 몇 곳 둘지 정하는 숫자예요. 2~6까지 비교해 보세요.</p>
+                    <div class="k-choice-row" role="group" aria-label="K값 빠른 선택">
+                        <span class="k-choice-label">빠르게 고르기</span>
+                        <div class="k-choice-list">
+                            <button type="button" class="k-choice" data-k-choice-control="2" onclick="updateK(2)">K=2</button>
+                            <button type="button" class="k-choice" data-k-choice-control="3" onclick="updateK(3)">K=3</button>
+                            <button type="button" class="k-choice" data-k-choice-control="4" onclick="updateK(4)">K=4</button>
+                            <button type="button" class="k-choice" data-k-choice-control="5" onclick="updateK(5)">K=5</button>
+                            <button type="button" class="k-choice" data-k-choice-control="6" onclick="updateK(6)">K=6</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Simulation Buttons -->
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="stepSimulation()" class="primary-action col-span-2 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition flex items-center justify-center gap-1.5 shadow-md">
+                        <i data-lucide="skip-forward" class="w-4 h-4"></i> 한 단계씩 실행
+                    </button>
+                    <button onclick="startSimulation()" class="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border border-slate-200">
+                        <i data-lucide="play" class="w-3.5 h-3.5"></i> 자동으로 끝까지 보기
+                    </button>
+                    <button onclick="resetSimulation()" class="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border border-slate-200">
+                        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> 초기화
+                    </button>
+                </div>
+
+                <!-- Status Progress Timeline -->
+                <div class="mt-4 pt-3 border-t border-slate-100">
+                    <span class="text-xs font-bold text-slate-500 block uppercase mb-2">알고리즘 진행 현황</span>
+                    <div class="flex items-center justify-between text-xs gap-1 text-center">
+                        <span id="step-1" class="flex-1 py-1 px-1 bg-slate-100 text-slate-500 rounded font-medium transition-all text-xs">1. 중심 후보 놓기</span>
+                        <span id="step-2" class="flex-1 py-1 px-1 bg-slate-100 text-slate-500 rounded font-medium transition-all text-xs">2. 가까운 중심에 묶기</span>
+                        <span id="step-3" class="flex-1 py-1 px-1 bg-slate-100 text-slate-500 rounded font-medium transition-all text-xs">3. 평균 위치로 옮기기</span>
+                    </div>
+                    <div id="step-message" class="status-message mt-3 rounded-xl bg-indigo-50 border border-indigo-100 px-3 py-2 text-xs leading-relaxed text-indigo-900" aria-live="polite">
+                        먼저 K값을 정하고, [한 단계씩 실행]을 눌러 중심 후보를 확인해 보세요.
+                    </div>
+                    <div id="simulation-complete" class="hidden mt-2 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs leading-relaxed text-emerald-900" aria-live="polite" role="status">
+                        수렴 완료! 중심이 더 이상 움직이지 않는 좋은 후보 위치를 찾았어요.
+                    </div>
+                </div>
+
+                <div id="stage-summary" class="stage-summary" aria-live="polite">
+                    <div class="stage-summary-card">
+                        <span class="stage-summary-label">지금 할 일</span>
+                        <span id="stage-summary-action" class="stage-summary-value">중심 후보를 확인해요</span>
+                    </div>
+                    <div class="stage-summary-card">
+                        <span class="stage-summary-label">관찰할 것</span>
+                        <span id="stage-summary-observe" class="stage-summary-value">점과 중심의 거리</span>
+                    </div>
+                    <div class="stage-summary-card">
+                        <span class="stage-summary-label">다음 단계</span>
+                        <span id="stage-summary-next" class="stage-summary-value">가까운 중심에 묶기</span>
+                    </div>
+                </div>
+
+                <div id="average-explanation" class="hidden w-full mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-950" aria-live="polite"></div>
+            </div>
+
+            <!-- Entry Block Tutorial Sheet -->
+            <div class="panel-card entry-guide-card bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex-1">
+                <h2 class="text-base font-bold text-slate-900 mb-3 flex items-center gap-2 border-b pb-2">
+                    <i data-lucide="code-2" class="w-4 h-4 text-indigo-600"></i>
+                    엔트리(Entry) 블록 가이드
+                </h2>
+                
+                <div class="flex gap-1 mb-3" role="tablist" aria-label="엔트리 가이드 단계">
+                    <button type="button" class="guide-tab rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-bold text-rose-700" data-guide-toggle="1" aria-expanded="true" aria-controls="guide-step-1" onclick="toggleGuideSection(this)">1 데이터</button>
+                    <button type="button" class="guide-tab rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700" data-guide-toggle="2" aria-expanded="false" aria-controls="guide-step-2" onclick="toggleGuideSection(this)">2 모델</button>
+                    <button type="button" class="guide-tab rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700" data-guide-toggle="3" aria-expanded="false" aria-controls="guide-step-3" onclick="toggleGuideSection(this)">3 블록</button>
+                </div>
+                <div id="guide-sections" class="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                        <span class="inline-block px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] font-bold rounded-md mb-1">1단계: 테이블 가져오기</span>
+                        <p class="text-xs text-slate-600 leading-normal">
+                            아래 버튼으로 <strong>예시 데이터 CSV</strong>를 내려받아 엔트리의 <b>[데이터 분석] &gt; [테이블 불러오기]</b> 메뉴로 추가해 보세요.
+                        </p>
+                        <button onclick="downloadEntryData()" class="mt-2 w-full py-2 px-3 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition">예시 데이터 CSV 내려받기</button>
+                        <a href="K-평균-수업-활동지.html" target="_blank" class="mt-2 block w-full py-2 px-3 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold text-center transition">인쇄용 활동지 열기</a>
+                    </div>
+
+                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                        <span class="inline-block px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-md mb-1">2단계: 군집화 모델 생성</span>
+                        <p class="text-xs text-slate-600 leading-normal">
+                            <b>[인공지능 모델 학습하기] &gt; [군집화(K-평균)]</b>을 누르고 핵심 속성을 <b>'엔트리_X좌표'</b>와 <b>'엔트리_Y좌표'</b> 두 개로 지정합니다. K값은 놓고 싶은 시설의 개수예요.
+                        </p>
+                    </div>
+
+                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                        <span class="inline-block px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-md mb-1">3단계: 핵심 블록 코딩</span>
+                        <div class="mt-1.5 space-y-1">
+                            <div class="text-[10px] bg-blue-50 border border-blue-200 p-1.5 rounded font-mono text-slate-700">
+                                [인공지능] 모델 학습하기
+                            </div>
+                            <div class="text-[10px] bg-blue-50 border border-blue-200 p-1.5 rounded font-mono text-slate-700">
+                                [인공지능] 군집 <b>[K]</b>의 중심 X 좌표값 / Y 좌표값 가져오기
+                            </div>
+                            <div class="text-[10px] bg-purple-50 border border-purple-200 p-1.5 rounded font-mono text-slate-700">
+                                [움직임] X: <b>[중심 X좌표]</b>, Y: <b>[중심 Y좌표]</b> 위치로 이동하기
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Side: Interactive Entry Stage Visualizer -->
+        <div class="visual-panel lg:col-span-8 flex flex-col gap-4">
+            
+            <!-- The Entry Stage Canvas -->
+            <div class="panel-card map-card bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col items-center">
+                <div class="w-full flex flex-wrap justify-between items-center gap-2 mb-2 px-1 text-xs">
+                    <span class="font-bold text-slate-600 flex items-center gap-1">
+                        <i data-lucide="eye" class="w-4 h-4 text-emerald-500"></i>
+                        <span><strong>우리 동네 지도에서 찾아보기</strong><small>엔트리 가상 화면 · 480 × 270</small></span>
+                    </span>
+                    <span id="it-count" class="text-slate-500 text-xs" aria-live="polite">반복 횟수: 0</span>
+                    <span id="distance-stat" class="text-slate-500 text-xs" aria-live="polite">점-중심 평균 거리: 시작 전</span>
+                </div>
+                <div class="w-full flex flex-wrap gap-x-3 gap-y-1 mb-2 px-1 text-xs text-slate-600" aria-label="화면 범례">
+                    <span><b class="text-slate-700">● ■ ◆ ▲ ✚ ⬡</b> 모둠별 장소 점</span>
+                    <span><b class="text-indigo-600">◆</b> 중심 후보</span>
+                    <span><b class="text-slate-700">┄</b> 같은 모둠까지의 거리</span>
+                </div>
+
+                <!-- Simulation Canvas (Coordinate Area) -->
+                <div class="exploration-canvas relative w-full overflow-hidden bg-slate-900 border border-slate-800 rounded-xl shadow-inner aspect-[16/9]">
+                    
+                    <!-- Simulated Map Overlay Concept (Abstract Stylized Vector Grid) -->
+                    <div class="absolute inset-0 opacity-20 pointer-events-none select-none">
+                        <!-- Simulated street blocks -->
+                        <div class="absolute top-4 left-6 w-32 h-16 border border-white/50 rounded bg-white/5"></div>
+                        <div class="absolute top-28 left-4 w-24 h-24 border border-white/50 rounded bg-white/5"></div>
+                        <div class="absolute bottom-6 left-12 w-48 h-12 border border-white/50 rounded bg-white/5"></div>
+                        <div class="absolute top-8 right-16 w-36 h-28 border border-white/50 rounded bg-white/5"></div>
+                        <div class="absolute bottom-8 right-20 w-44 h-16 border border-white/50 rounded bg-white/5"></div>
+                    </div>
+
+                    <!-- SVG Renderer for Axis and Points -->
+                    <svg id="entry-svg" viewBox="0 0 480 270" class="w-full h-full" role="img" aria-labelledby="entry-svg-title entry-svg-desc">
+                        <title id="entry-svg-title">장소 점과 시설 중심 후보를 보여 주는 좌표 화면</title>
+                        <desc id="entry-svg-desc">회색 또는 색깔 점은 장소이고, 핀 모양 표시는 각 모둠의 중심 후보입니다. 선은 장소와 중심 사이를 연결합니다.</desc>
+                        <!-- Coordinate Grids -->
+                        <line x1="240" y1="0" x2="240" y2="270" class="axis-line" />
+                        <line x1="0" y1="135" x2="480" y2="135" class="axis-line" />
+                        
+                        <!-- Grid labels -->
+                        <text x="245" y="15" fill="#94a3b8" font-size="8" font-weight="bold">Y: 135</text>
+                        <text x="245" y="265" fill="#94a3b8" font-size="8" font-weight="bold">Y: -135</text>
+                        <text x="5" y="130" fill="#94a3b8" font-size="8" font-weight="bold">X: -240</text>
+                        <text x="445" y="130" fill="#94a3b8" font-size="8" font-weight="bold">X: 240</text>
+                        <text x="245" y="130" fill="#94a3b8" font-size="8" font-weight="bold" opacity="0.5">0,0</text>
+
+                        <!-- Dynamic elements will be injected here via JS -->
+                        <g id="line-group"></g>
+                        <g id="data-points-group"></g>
+                        <g id="centroids-group"></g>
+                    </svg>
+                    
+                    <!-- Tooltip Box inside canvas -->
+                    <div id="tooltip" class="absolute hidden bg-slate-950/95 border border-slate-700/50 p-2.5 rounded-lg text-[10px] text-white shadow-xl pointer-events-none"></div>
+                </div>
+            </div>
+
+            <!-- Live Clusters Statistics -->
+            <div class="panel-card result-card bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                <h3 class="text-sm font-bold text-slate-900 mb-3 flex items-center gap-1.5">
+                    <i data-lucide="bar-chart-3" class="w-4 h-4 text-indigo-600"></i>
+                    현재 모둠의 중심 후보와 참고 수요
+                </h3>
+                <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-3" id="centroids-stats">
+                    <!-- Dynamic rendering of selected cluster centers -->
+                    <div class="text-center p-3 border border-slate-100 rounded-xl bg-slate-50">
+                        <p class="text-xs text-slate-400">아직 점을 모둠으로 묶지 않았어요.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- K comparison panel -->
+            <div id="comparison-panel" class="panel-card comparison-card bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <h3 class="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                        <i data-lucide="scale" class="w-4 h-4 text-indigo-600"></i>
+                        K값 비교해 보기
+                    </h3>
+                    <button onclick="runKComparison()" class="py-2 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold border border-indigo-100 transition">K=2·3·4·5·6 비교</button>
+                </div>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                    평균 거리가 작을수록 점과 중심이 가까워요. K가 커질수록 가까워질 수 있지만 필요한 시설 수와 관리 부담도 늘어나요.
+                </p>
+                <div id="comparison-empty-state" class="comparison-empty-state mt-3" aria-live="polite">
+                    <span class="empty-state-icon" aria-hidden="true">🧭</span>
+                    <div>
+                        <strong>먼저 한 단계씩 실행해 보세요</strong>
+                        <span>점들이 모둠으로 묶이는 모습을 본 다음 K=2~6 결과를 비교하면 더 쉽게 결정할 수 있어요.</span>
+                    </div>
+                </div>
+                <div id="comparison-results" class="mt-3" aria-live="polite">
+                    <p class="text-xs text-slate-400 text-center py-3">버튼을 누르면 K=2, K=3, K=4, K=5, K=6 결과를 비교해 보여드려요.</p>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer bg-white border-t border-slate-200 py-6 mt-12">
+        <div class="max-w-7xl mx-auto px-6 text-center text-xs text-slate-400 leading-loose">
+            K-SDGs (국가지속가능발전목표) 실천을 위한 인공지능 탐구 교육 프로그램 설계<br>
+            © AI Education Tool - Designed for Entry Platform. All rights reserved.
+        </div>
+    </footer>
+
+    <script>
+        // Set coordinate transform helper from Entry coordinate system to Canvas system
+        // Entry: (-240 ~ 240) -> SVG: (0 ~ 480)
+        // Entry: (-135 ~ 135) -> SVG: (270 ~ 0) (Note: Y axis in entry is up-positive, SVG is down-positive)
+        function toSvgX(entryX) {
+            return entryX + 240;
+        }
+        function toSvgY(entryY) {
+            return 135 - entryY;
+        }
+
+        // Color theme mapping
+        const colors = [
+            '#ef4444', // Red
+            '#10b981', // Emerald
+            '#3b82f6', // Blue
+            '#f59e0b', // Amber
+            '#8b5cf6', // Violet
+            '#ec4899'  // Pink
+        ];
+
+        // Core 30 points representing the map features
+        const mapData = [
+            // Cluster 1 (Top-Left)
+            { id: 1, name: "더바른한의원 앞 사거리", x: -150, y: 95, value: 120, label: "대여수요" },
+            { id: 2, name: "한돈보쌈 건너편 인도", x: -185, y: 75, value: 95, label: "대여수요" },
+            { id: 3, name: "정암하이츠빌 A동 정문", x: -110, y: 85, value: 45, label: "대여수요" },
+            { id: 4, name: "새말로8길 골목 교차점", x: -165, y: 45, value: 50, label: "대여수요" },
+            { id: 5, name: "새말로 버스정류장 주변", x: -135, y: 65, value: 110, label: "대여수요" },
+            { id: 6, name: "대흥아트빌 앞 공터", x: -80, y: 90, value: 35, label: "대여수요" },
+            { id: 7, name: "새말로8길 상가 진입로", x: -145, y: 20, value: 80, label: "대여수요" },
+            
+            // Cluster 2 (Bottom-Left)
+            { id: 8, name: "동심아트빌 정문 옆", x: -160, y: -20, value: 60, label: "대여수요" },
+            { id: 9, name: "보성팰리스 16차 주차장", x: -130, y: -45, value: 75, label: "대여수요" },
+            { id: 10, name: "보성팰리스 18차 정류장", x: -145, y: -75, value: 85, label: "대여수요" },
+            { id: 11, name: "영림아트빌 A동 관리소 앞", x: -95, y: -55, value: 140, label: "대여수요" },
+            { id: 12, name: "구로중앙로3가길 빌라촌 1", x: -115, y: -25, value: 40, label: "대여수요" },
+            { id: 13, name: "나레스톤빌 앞 골목길", x: -45, y: -65, value: 50, label: "대여수요" },
+            { id: 14, name: "멘토 학원가 앞 통학로", x: -15, y: -70, value: 165, label: "대여수요" },
+            
+            // Cluster 3 (Center-Bottom)
+            { id: 15, name: "흥원식품 앞 사거리 (중심)", x: 5, y: -25, value: 210, label: "대여수요" },
+            { id: 16, name: "현대카우스빌 앞 인도", x: 0, y: -50, value: 115, label: "대여수요" },
+            { id: 17, name: "동양합기도 앞 교차로", x: 65, y: -30, value: 130, label: "대여수요" },
+            { id: 18, name: "태영빌딩 앞 횡단보도", x: 75, y: -45, value: 145, label: "대여수요" },
+            { id: 19, name: "홍운중국식품 앞 삼거리", x: 70, y: -75, value: 95, label: "대여수요" },
+            { id: 20, name: "구로중앙로3가나길 상가 앞", x: -15, y: 15, value: 70, label: "대여수요" },
+            
+            // Cluster 4 (Right / Top-Right)
+            { id: 21, name: "강물어린이집 정문 앞", x: 75, y: 25, value: 105, label: "대여수요" },
+            { id: 22, name: "해피하우스 앞 골목길", x: 100, y: 20, value: 85, label: "대여수요" },
+            { id: 23, name: "골드빌 아파트 정문", x: 130, y: 35, value: 65, label: "대여수요" },
+            { id: 24, name: "구로반석교회 진입로", x: 185, y: 45, value: 40, label: "대여수요" },
+            { id: 25, name: "한솔유통 앞 교차로", x: 145, y: -10, value: 110, label: "대여수요" },
+            { id: 26, name: "정다운식당 앞 도로", x: 175, y: -25, value: 75, label: "대여수요" },
+            { id: 27, name: "수정식당 부근 골목길", x: 135, y: -50, value: 50, label: "대여수요" },
+            { id: 28, name: "어반하우스 앞 횡단보도", x: 145, y: -75, value: 125, label: "대여수요" },
+            { id: 29, name: "푸른나래빌 정문 옆", x: 185, y: -85, value: 55, label: "대여수요" },
+            { id: 30, name: "오코르지일 GR2 부근", x: 210, y: -65, value: 40, label: "대여수요" }
+        ];
+
+        function clampCoordinate(value, min, max) {
+            return Math.max(min, Math.min(max, Math.round(value)));
+        }
+
+        // Each learning theme uses a different classroom example distribution.
+        const themeData = {
+            bike: mapData,
+            shelter: mapData.map(p => ({
+                ...p,
+                x: clampCoordinate(p.x * 0.78 + 28, -220, 220),
+                y: clampCoordinate(p.y * 0.92 - 18, -120, 120)
+            })),
+            recycle: mapData.map(p => ({
+                ...p,
+                x: clampCoordinate(p.x * 0.90 - 22, -220, 220),
+                y: clampCoordinate(p.y * 0.64 + 24, -120, 120)
+            }))
+        };
+
+        // Setup theme detail data
+        const themeDetails = {
+            bike: {
+                title: "자전거 대여소 찾기 (K-SDGs 11)",
+                desc: "주민들이 통학이나 출퇴근 시 친환경 자전거를 쉽게 빌릴 수 있는 좋은 후보 위치 3~5곳을 데이터로 찾아 봅니다.",
+                label: "예상 대여건수",
+                unit: "건",
+                icon: "bike"
+            },
+            shelter: {
+                title: "무더위 쉼터 설치 위치 찾기 (K-SDGs 3 / 13)",
+                desc: "폭염 시 어린이, 노약자 및 길을 걷던 보행자들이 쉬어갈 수 있는 교차로 중심 쉼터/그늘막 명당을 선정합니다.",
+                label: "일일 유동인구",
+                unit: "명",
+                icon: "sun"
+            },
+            recycle: {
+                title: "투명 페트병 무인 회수기 설치 (K-SDGs 12)",
+                desc: "주거 단지와 상가 근처에서 쓰레기가 많이 발생하는 핵심 위치를 거점으로 묶어 주민 이동 거리를 최소화하는 자원 거점을 찾습니다.",
+                label: "페트병 배출량",
+                unit: "개",
+                icon: "leaf"
+            }
+        };
+
+        let currentTheme = 'bike';
+        let kValue = 3;
+        let centroids = [];
+        let iteration = 0;
+        let points = JSON.parse(JSON.stringify(themeData.bike)); // clone array
+        let animationInterval = null;
+        let currentStep = 0; // 0: initial centers, 1: assigned, 2: moved
+        let isConverged = false;
+        let selectedKChoice = null;
+        const clusterShapes = ['circle', 'square', 'diamond', 'triangle', 'cross', 'hexagon'];
+
+        // Initialize App
+        function init() {
+            if (window.lucide && typeof lucide.createIcons === 'function') {
+                lucide.createIcons();
+            }
+            initializeGuideSections();
+            updateK(3);
+            resetSimulation();
+        }
+
+        function changeTheme(themeKey) {
+            currentTheme = themeKey;
+            
+            // UI Button styling update
+            ['bike', 'shelter', 'recycle'].forEach(k => {
+                const btn = document.getElementById(`btn-theme-${k}`);
+                btn.setAttribute('aria-pressed', k === themeKey ? 'true' : 'false');
+                if (k === themeKey) {
+                    btn.className = "theme-choice px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all bg-white text-indigo-700 shadow-sm";
+                } else {
+                    btn.className = "theme-choice px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all text-slate-600 hover:text-slate-900";
+                }
+            });
+
+            // Update Theme info box
+            const details = themeDetails[themeKey];
+            const themeDesc = document.getElementById('theme-desc');
+            
+            let iconMarkup = `<i data-lucide="${details.icon}" class="w-4 h-4"></i>`;
+            themeDesc.innerHTML = `
+                <h3 class="text-sm font-bold text-indigo-900 flex items-center gap-1.5">
+                    ${iconMarkup} ${details.title}
+                </h3>
+                <p class="text-xs text-indigo-700 mt-1 leading-relaxed">
+                    ${details.desc}
+                </p>
+            `;
+            if (window.lucide && typeof lucide.createIcons === 'function') {
+                lucide.createIcons();
+            }
+
+            // Transform data point value scales based on theme
+            points = JSON.parse(JSON.stringify(themeData[themeKey])).map(p => {
+                if (themeKey === 'bike') {
+                    p.label = "예상 대여건수";
+                    p.value = p.value; // Keep original
+                } else if (themeKey === 'shelter') {
+                    p.label = "일일 유동인구";
+                    p.value = Math.round(p.value * 4.2); // scale up for realistic population
+                } else {
+                    p.label = "페트병 배출량";
+                    p.value = Math.round(p.value * 1.8);
+                }
+                return p;
+            });
+
+            resetSimulation();
+        }
+
+        function updateK(val) {
+            val = Math.max(2, Math.min(6, parseInt(val) || 3));
+            kValue = val;
+            document.getElementById('input-k').value = val;
+            document.getElementById('slider-k').value = val;
+            document.getElementById('slider-k').setAttribute('aria-valuenow', val);
+            document.getElementById('slider-k').setAttribute('aria-valuetext', `${val}개 시설`);
+            document.getElementById('k-value-display').innerText = `${val}개`;
+            document.querySelectorAll('[data-k-choice-control]').forEach(button => {
+                const selected = Number(button.dataset.kChoiceControl) === val;
+                button.classList.toggle('is-selected', selected);
+                button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+            });
+            resetSimulation();
+        }
+
+        function setStepMessage(message) {
+            document.getElementById('step-message').innerText = message;
+        }
+
+        function setCompletionState(isComplete) {
+            document.getElementById('simulation-complete').classList.toggle('hidden', !isComplete);
+        }
+
+        function updateLearningGuidance() {
+            const action = document.getElementById('stage-summary-action');
+            const observe = document.getElementById('stage-summary-observe');
+            const next = document.getElementById('stage-summary-next');
+            const mission = document.getElementById('learning-mission-copy');
+            if (!action || !observe || !next || !mission) return;
+
+            const guidance = isConverged
+                ? {
+                    action: '좋은 후보 위치를 확인해요',
+                    observe: '중심이 더 움직이지 않아요',
+                    next: 'K값을 바꾸어 비교하기',
+                    mission: '수렴했어요! 이제 K=2~6 결과를 비교하고 우리 동네에 알맞은 K를 골라 보세요.'
+                }
+                : currentStep === 0
+                    ? {
+                        action: '한 단계씩 실행을 눌러요',
+                        observe: '중심 후보와 점의 위치',
+                        next: '가까운 중심에 묶기',
+                        mission: 'K값을 정하고 한 단계씩 실행을 눌러 가까운 점끼리 모이는 모습을 살펴보세요.'
+                    }
+                    : currentStep === 1
+                        ? {
+                            action: '같은 색 점을 찾아요',
+                            observe: '점과 중심 사이 거리',
+                            next: '평균 위치로 옮기기',
+                            mission: '같은 색 점들이 한 모둠이 되었어요. 어느 쪽에 점이 더 많이 모였는지 관찰해 보세요.'
+                        }
+                        : {
+                            action: '중심이 옮겨진 곳을 봐요',
+                            observe: '모둠별 평균 위치',
+                            next: '다시 가까운 중심 찾기',
+                            mission: '각 모둠의 가운데로 중심을 옮겼어요. 다시 실행하면 모둠이 더 잘 맞는지 확인할 수 있어요.'
+                        };
+
+            action.innerText = guidance.action;
+            observe.innerText = guidance.observe;
+            next.innerText = guidance.next;
+            mission.innerText = guidance.mission;
+        }
+
+        function initializeGuideSections() {
+            const sections = Array.from(document.querySelectorAll('#guide-sections > .p-3'));
+            sections.forEach((section, index) => {
+                section.id = `guide-step-${index + 1}`;
+                section.classList.add('guide-section');
+                section.classList.toggle('is-collapsed', index !== 0);
+            });
+        }
+
+        function toggleGuideSection(button) {
+            const targetId = button.getAttribute('aria-controls');
+            const target = document.getElementById(targetId);
+            if (!target) return;
+
+            document.querySelectorAll('[data-guide-toggle]').forEach(tab => {
+                tab.setAttribute('aria-expanded', String(tab === button));
+            });
+            document.querySelectorAll('#guide-sections > .guide-section').forEach(section => {
+                section.classList.toggle('is-collapsed', section !== target);
+            });
+        }
+
+        function downloadEntryData() {
+            const details = themeDetails[currentTheme];
+            const headers = ['이름', '엔트리_X좌표', '엔트리_Y좌표', details.label];
+            const escapeCsv = value => `"${String(value).replace(/"/g, '""')}"`;
+            const rows = points.map(p => [p.name, p.x, p.y, p.value]);
+            const csv = `\uFEFF${[headers, ...rows].map(row => row.map(escapeCsv).join(',')).join('\n')}`;
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `kmeans-${currentTheme}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        function calculateAverageDistance(pointSet, centroidSet) {
+            const assignedPoints = pointSet.filter(p => p.cluster !== -1);
+            if (assignedPoints.length === 0) return null;
+
+            const totalDistance = assignedPoints.reduce((sum, p) => {
+                const centroid = centroidSet.find(c => c.id === p.cluster);
+                if (!centroid) return sum;
+                return sum + Math.sqrt(Math.pow(p.x - centroid.x, 2) + Math.pow(p.y - centroid.y, 2));
+            }, 0);
+
+            return totalDistance / assignedPoints.length;
+        }
+
+        function updateDistanceStat() {
+            const distance = calculateAverageDistance(points, centroids);
+            const stat = document.getElementById('distance-stat');
+            stat.innerText = distance === null
+                ? '점-중심 평균 거리: 시작 전'
+                : `점-중심 평균 거리: ${distance.toFixed(1)} (작을수록 가까워요)`;
+        }
+
+        function updateAverageExplanation() {
+            const panel = document.getElementById('average-explanation');
+            const hasAssignments = points.some(point => point.cluster !== -1);
+
+            if (!hasAssignments) {
+                panel.classList.add('hidden');
+                panel.innerHTML = '';
+                return;
+            }
+
+            const summaries = centroids.map((centroid, index) => {
+                const clusterPoints = points.filter(point => point.cluster === centroid.id);
+                if (clusterPoints.length === 0) {
+                    return `<li><strong>모둠 ${index + 1}</strong>: 아직 묶인 장소가 없어요.</li>`;
+                }
+                const avgX = Math.round(clusterPoints.reduce((sum, point) => sum + point.x, 0) / clusterPoints.length);
+                const avgY = Math.round(clusterPoints.reduce((sum, point) => sum + point.y, 0) / clusterPoints.length);
+                return `<li><strong>모둠 ${index + 1}</strong>: ${clusterPoints.length}곳 → X 평균 ${avgX}, Y 평균 ${avgY}</li>`;
+            }).join('');
+
+            panel.classList.remove('hidden');
+            panel.innerHTML = `
+                <p class="font-bold">평균 위치는 이렇게 찾아요</p>
+                <p class="mt-1">같은 모둠의 X좌표와 Y좌표를 각각 더한 뒤, 장소 수로 나눠요.</p>
+                <ul class="mt-2 list-disc space-y-1 pl-5">${summaries}</ul>
+            `;
+        }
+
+        // Initialize Centroids randomly matching a subset of existing data points
+        function resetSimulation() {
+            stopSimulationInterval();
+            iteration = 0;
+            currentStep = 0;
+            isConverged = false;
+            selectedKChoice = null;
+            document.getElementById('it-count').innerText = `반복 횟수: 0`;
+            setCompletionState(false);
+
+            // Clear visual indicators
+            setStepIndicator(1);
+            setStepMessage('중심 후보를 무작위로 놓았어요. 이제 가까운 중심에 점을 묶어 보세요.');
+
+            // Set random centroids
+            centroids = [];
+            const tempPoints = [...points];
+            // Shuffle and pick k points
+            for (let i = 0; i < kValue; i++) {
+                const randIndex = Math.floor(Math.random() * tempPoints.length);
+                const p = tempPoints.splice(randIndex, 1)[0];
+                centroids.push({
+                    id: i,
+                    x: p.x,
+                    y: p.y,
+                    color: colors[i]
+                });
+            }
+
+            // Assign closest centroid initially
+            points.forEach(p => p.cluster = -1);
+
+            render();
+            updateCentroidStatsTable();
+            updateDistanceStat();
+            updateAverageExplanation();
+            updateLearningGuidance();
+            const comparisonResults = document.getElementById('comparison-results');
+            const comparisonEmptyState = document.getElementById('comparison-empty-state');
+            if (comparisonResults) {
+                comparisonResults.innerHTML = '<p class="text-xs text-slate-400 text-center py-3">버튼을 누르면 K=2, K=3, K=4, K=5, K=6 결과를 비교해 보여드려요.</p>';
+            }
+            if (comparisonEmptyState) comparisonEmptyState.classList.remove('hidden');
+        }
+
+        // K-Means Step-by-Step Logic
+        function stepSimulation() {
+            if (isConverged) {
+                setStepMessage('이미 수렴했어요. K값을 바꾸거나 초기화를 눌러 다시 시작해 보세요.');
+                return;
+            }
+
+            if (currentStep === 0 || currentStep === 2) {
+                // Step 2: Assign to nearest Centroid
+                assignClusters();
+                currentStep = 1;
+                setStepIndicator(2);
+                setStepMessage('가까운 중심에 점을 붙였어요. 같은 색 점들이 한 모둠이 됩니다.');
+            } else if (currentStep === 1) {
+                // Step 3: Move Centroids to Mean of elements
+                const changed = updateCentroids();
+                currentStep = 2;
+                setStepIndicator(3);
+                iteration++;
+                document.getElementById('it-count').innerText = `반복 횟수: ${iteration}`;
+                setStepMessage('각 모둠의 평균 위치로 중심을 옮겼어요. 다시 가까운 중심을 찾아볼까요?');
+                
+                if (!changed) {
+                    stopSimulationInterval();
+                    isConverged = true;
+                    setStepIndicator(3);
+                    setStepMessage('중심이 더 이상 움직이지 않아요. 이번 실행에서 찾은 좋은 후보 위치입니다.');
+                    setCompletionState(true);
+                }
+            }
+            render();
+            updateCentroidStatsTable();
+            updateDistanceStat();
+            updateAverageExplanation();
+            updateLearningGuidance();
+        }
+
+        function assignPointsToCentroids(pointSet, centroidSet) {
+            pointSet.forEach(p => {
+                let minDist = Infinity;
+                let nearestCluster = -1;
+                centroidSet.forEach(c => {
+                    const d = Math.pow(p.x - c.x, 2) + Math.pow(p.y - c.y, 2);
+                    if (d < minDist) {
+                        minDist = d;
+                        nearestCluster = c.id;
+                    }
+                });
+                p.cluster = nearestCluster;
+            });
+        }
+
+        function moveCentroidsToMean(pointSet, centroidSet) {
+            let centroidMoved = false;
+            for (let i = 0; i < centroidSet.length; i++) {
+                const clusterPoints = pointSet.filter(p => p.cluster === i);
+                if (clusterPoints.length > 0) {
+                    const avgX = Math.round(clusterPoints.reduce((acc, p) => acc + p.x, 0) / clusterPoints.length);
+                    const avgY = Math.round(clusterPoints.reduce((acc, p) => acc + p.y, 0) / clusterPoints.length);
+                    
+                    if (centroidSet[i].x !== avgX || centroidSet[i].y !== avgY) {
+                        centroidSet[i].x = avgX;
+                        centroidSet[i].y = avgY;
+                        centroidMoved = true;
+                    }
+                }
+            }
+            return centroidMoved;
+        }
+
+        function assignClusters() {
+            assignPointsToCentroids(points, centroids);
+        }
+
+        function updateCentroids() {
+            return moveCentroidsToMean(points, centroids);
+        }
+
+        function createComparisonCentroids(k, pointSet) {
+            const lastIndex = pointSet.length - 1;
+            return Array.from({ length: k }, (_, index) => {
+                const pointIndex = Math.round(index * lastIndex / (k - 1));
+                const point = pointSet[pointIndex];
+                return {
+                    id: index,
+                    x: point.x,
+                    y: point.y,
+                    color: colors[index]
+                };
+            });
+        }
+
+        function simulateKMeansForComparison(k) {
+            const comparisonPoints = JSON.parse(JSON.stringify(points));
+            const comparisonCentroids = createComparisonCentroids(k, comparisonPoints);
+            let iterations = 0;
+            let moved = true;
+
+            while (moved && iterations < 30) {
+                assignPointsToCentroids(comparisonPoints, comparisonCentroids);
+                moved = moveCentroidsToMean(comparisonPoints, comparisonCentroids);
+                iterations++;
+            }
+
+            assignPointsToCentroids(comparisonPoints, comparisonCentroids);
+            return {
+                k,
+                iterations,
+                averageDistance: calculateAverageDistance(comparisonPoints, comparisonCentroids)
+            };
+        }
+
+        function runKComparison() {
+            const results = [2, 3, 4, 5, 6].map(simulateKMeansForComparison);
+            const resultsContainer = document.getElementById('comparison-results');
+            const comparisonEmptyState = document.getElementById('comparison-empty-state');
+            if (comparisonEmptyState) comparisonEmptyState.classList.add('hidden');
+            resultsContainer.innerHTML = `
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs text-left">
+                        <thead class="text-xs text-slate-500 uppercase border-b border-slate-100">
+                            <tr>
+                                <th class="py-2 pr-2">시설 수</th>
+                                <th class="py-2 pr-2">반복 횟수</th>
+                                <th class="py-2">점-중심 평균 거리</th>
+                                <th class="py-2">관리 부담</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${results.map(result => `
+                                <tr class="border-b border-slate-50 last:border-0">
+                                    <th class="py-2 pr-2 font-bold text-slate-700">K=${result.k} (${result.k}곳)</th>
+                                    <td class="py-2 pr-2 text-slate-500">${result.iterations}회</td>
+                                    <td class="py-2 font-bold text-indigo-600">${result.averageDistance.toFixed(1)}</td>
+                                    <td class="py-2 text-slate-600">${result.k <= 3 ? '작음' : result.k <= 4 ? '보통' : '커짐'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 rounded-xl bg-indigo-50 p-3">
+                    <p class="text-xs font-bold text-indigo-950">내가 고른 K는?</p>
+                    <div class="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label="내가 고른 K값">
+                        ${results.map(result => `<button type="button" data-k-choice="${result.k}" onclick="selectKChoice(${result.k})" class="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100" role="radio" aria-checked="${selectedKChoice === result.k ? 'true' : 'false'}">K=${result.k}</button>`).join('')}
+                    </div>
+                    <label for="k-choice-reason" class="mt-3 block text-xs font-bold text-indigo-950">고른 이유</label>
+                    <input id="k-choice-reason" type="text" maxlength="80" class="mt-1 w-full rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm text-slate-800" placeholder="예: 거리는 가깝고 시설 수가 너무 많지 않아요." aria-describedby="selected-k-choice">
+                    <p id="selected-k-choice" class="mt-2 text-xs text-indigo-800" aria-live="polite">K를 하나 골라 보고 이유를 적어 보세요.</p>
+                </div>
+                <p class="mt-3 text-xs leading-relaxed text-slate-500">K가 커질수록 평균 거리가 작아질 수 있지만, 필요한 시설 수와 관리 부담도 늘어나요. 어떤 K가 우리 동네에 알맞을까요?</p>
+            `;
+
+            if (selectedKChoice !== null) {
+                selectKChoice(selectedKChoice);
+            }
+        }
+
+        function selectKChoice(k) {
+            selectedKChoice = k;
+            document.querySelectorAll('[data-k-choice]').forEach(button => {
+                const isSelected = Number(button.dataset.kChoice) === k;
+                button.setAttribute('aria-checked', String(isSelected));
+                button.className = isSelected
+                    ? 'rounded-lg border border-indigo-700 bg-indigo-600 px-3 py-2 text-xs font-bold text-white'
+                    : 'rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100';
+            });
+            const message = document.getElementById('selected-k-choice');
+            if (message) {
+                message.innerText = `K=${k}를 골랐어요. 거리와 시설 수, 관리 부담을 함께 생각해 보세요.`;
+            }
+        }
+
+        function startSimulation() {
+            if (isConverged) {
+                setStepMessage('이미 분석을 마쳤어요. 초기화를 누르면 새로운 시작 위치로 다시 해 볼 수 있어요.');
+                return;
+            }
+            stopSimulationInterval();
+            animationInterval = setInterval(() => {
+                stepSimulation();
+            }, 1000);
+        }
+
+        function stopSimulationInterval() {
+            if (animationInterval) {
+                clearInterval(animationInterval);
+                animationInterval = null;
+            }
+        }
+
+        // Highlighting Step indicators
+        function setStepIndicator(stepNum) {
+            const steps = [
+                document.getElementById('step-1'),
+                document.getElementById('step-2'),
+                document.getElementById('step-3')
+            ];
+            
+            steps.forEach((el, idx) => {
+                if (idx + 1 === stepNum) {
+                    el.className = "flex-1 py-1 px-1 bg-indigo-600 text-white rounded font-bold transition-all text-xs shadow-sm";
+                } else {
+                    el.className = "flex-1 py-1 px-1 bg-slate-100 text-slate-500 rounded font-medium transition-all text-xs";
+                }
+            });
+        }
+
+        function createClusterMarker(point, fillColor) {
+            let marker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            const x = toSvgX(point.x);
+            const y = toSvgY(point.y);
+            const shape = point.cluster === -1 ? 'circle' : clusterShapes[point.cluster % clusterShapes.length];
+
+            if (shape === 'square') {
+                marker = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                marker.setAttribute('x', x - 5.5);
+                marker.setAttribute('y', y - 5.5);
+                marker.setAttribute('width', '11');
+                marker.setAttribute('height', '11');
+                marker.setAttribute('rx', '1.5');
+            } else if (shape === 'diamond') {
+                marker = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                marker.setAttribute('points', `${x},${y - 7} ${x + 7},${y} ${x},${y + 7} ${x - 7},${y}`);
+            } else if (shape === 'triangle') {
+                marker = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                marker.setAttribute('points', `${x},${y - 7} ${x + 7},${y + 6} ${x - 7},${y + 6}`);
+            } else if (shape === 'cross') {
+                marker = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                marker.setAttribute('d', `M ${x - 7} ${y - 2} H ${x - 2} V ${y - 7} H ${x + 2} V ${y - 2} H ${x + 7} V ${y + 2} H ${x + 2} V ${y + 7} H ${x - 2} V ${y + 2} H ${x - 7} Z`);
+            } else if (shape === 'hexagon') {
+                marker = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                marker.setAttribute('points', `${x - 6},${y} ${x - 3},${y - 6} ${x + 3},${y - 6} ${x + 6},${y} ${x + 3},${y + 6} ${x - 3},${y + 6}`);
+            } else {
+                marker.setAttribute('cx', x);
+                marker.setAttribute('cy', y);
+                marker.setAttribute('r', '5.5');
+            }
+
+            marker.setAttribute('fill', fillColor);
+            marker.setAttribute('stroke', '#ffffff');
+            marker.setAttribute('stroke-width', '1.5');
+            marker.setAttribute('data-shape', shape);
+            return marker;
+        }
+
+        // Render everything on Entry Screen (SVG coordinate area)
+        function render() {
+            const lineGroup = document.getElementById('line-group');
+            const dataGroup = document.getElementById('data-points-group');
+            const centroidsGroup = document.getElementById('centroids-group');
+
+            // Clear previous elements
+            lineGroup.innerHTML = '';
+            dataGroup.innerHTML = '';
+            centroidsGroup.innerHTML = '';
+
+            // 1. Draw connection lines from points to assigned centroids
+            points.forEach(p => {
+                if (p.cluster !== -1) {
+                    const c = centroids.find(cent => cent.id === p.cluster);
+                    if (c) {
+                        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        line.setAttribute('x1', toSvgX(p.x));
+                        line.setAttribute('y1', toSvgY(p.y));
+                        line.setAttribute('x2', toSvgX(c.x));
+                        line.setAttribute('y2', toSvgY(c.y));
+                        line.setAttribute('stroke', c.color);
+                        line.setAttribute('stroke-width', '1');
+                        line.setAttribute('stroke-dasharray', '2,2');
+                        line.setAttribute('opacity', '0.6');
+                        lineGroup.appendChild(line);
+                    }
+                }
+            });
+
+            // 2. Draw Data Points (Citizens)
+            points.forEach(p => {
+                const fillColor = p.cluster !== -1 ? centroids.find(c => c.id === p.cluster).color : '#cbd5e1';
+                const marker = createClusterMarker(p, fillColor);
+                marker.setAttribute('class', 'cluster-shapes cursor-pointer transition-all-custom focus:outline-none');
+                marker.setAttribute('tabindex', '0');
+                marker.setAttribute('role', 'img');
+                marker.setAttribute('aria-label', `${p.name}, ${p.label} ${p.value}${themeDetails[currentTheme].unit}`);
+
+                marker.addEventListener('mouseenter', (event) => {
+                    showTooltip(event, p);
+                    marker.setAttribute('stroke-width', '3');
+                });
+                marker.addEventListener('mouseleave', () => {
+                    hideTooltip();
+                    marker.setAttribute('stroke-width', '1.5');
+                });
+                marker.addEventListener('focus', (event) => {
+                    showTooltip(event, p);
+                    marker.setAttribute('stroke-width', '3');
+                });
+                marker.addEventListener('blur', () => {
+                    hideTooltip();
+                    marker.setAttribute('stroke-width', '1.5');
+                });
+
+                dataGroup.appendChild(marker);
+            });
+
+            // 3. Draw Centroids (Elected optimal locations)
+            centroids.forEach(c => {
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.setAttribute('class', 'transition-all-custom');
+
+                // Draw central beacon ring
+                const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                ring.setAttribute('cx', toSvgX(c.x));
+                ring.setAttribute('cy', toSvgY(c.y));
+                ring.setAttribute('r', '14');
+                ring.setAttribute('fill', 'none');
+                ring.setAttribute('stroke', c.color);
+                ring.setAttribute('stroke-width', '2');
+                ring.setAttribute('stroke-dasharray', '3,1');
+                g.appendChild(ring);
+
+                // Central pinpoint
+                const pin = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                const x = toSvgX(c.x);
+                const y = toSvgY(c.y);
+                pin.setAttribute('points', `${x},${y-12} ${x-7},${y-2} ${x-3},${y-2} ${x-3},${y+8} ${x+3},${y+8} ${x+3},${y-2} ${x+7},${y-2}`);
+                pin.setAttribute('fill', c.color);
+                pin.setAttribute('stroke', '#ffffff');
+                pin.setAttribute('stroke-width', '1.5');
+                
+                // Highlight label
+                const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                label.setAttribute('x', toSvgX(c.x));
+                label.setAttribute('y', toSvgY(c.y) - 16);
+                label.setAttribute('fill', '#ffffff');
+                label.setAttribute('font-size', '9');
+                label.setAttribute('font-weight', 'bold');
+                label.setAttribute('text-anchor', 'middle');
+                label.textContent = `거점 ${c.id + 1}`;
+
+                // Label background box
+                const bbox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                bbox.setAttribute('x', toSvgX(c.x) - 15);
+                bbox.setAttribute('y', toSvgY(c.y) - 25);
+                bbox.setAttribute('width', '30');
+                bbox.setAttribute('height', '11');
+                bbox.setAttribute('fill', '#0f172a');
+                bbox.setAttribute('rx', '2');
+
+                g.appendChild(bbox);
+                g.appendChild(label);
+                g.appendChild(pin);
+                centroidsGroup.appendChild(g);
+            });
+        }
+
+        // Tooltip helpers
+        function showTooltip(e, p) {
+            const tooltip = document.getElementById('tooltip');
+            const unit = themeDetails[currentTheme].unit;
+            tooltip.innerHTML = `
+                <div class="font-bold text-slate-100">${p.name}</div>
+                <div class="text-slate-400 mt-1">좌표: X(${p.x}), Y(${p.y})</div>
+                <div class="text-indigo-400 font-medium">${p.label}: ${p.value.toLocaleString()}${unit}</div>
+            `;
+            tooltip.style.display = 'block';
+            
+            // Positioning coordinates inside the relative wrapper
+            const container = document.getElementById('entry-svg').parentNode;
+            const containerRect = container.getBoundingClientRect();
+            
+            let xPos = toSvgX(p.x) * (containerRect.width / 480) - 60;
+            let yPos = toSvgY(p.y) * (containerRect.height / 270) - 75;
+
+            tooltip.style.left = `${xPos}px`;
+            tooltip.style.top = `${yPos}px`;
+        }
+
+        function hideTooltip() {
+            document.getElementById('tooltip').style.display = 'none';
+        }
+
+        // Live stats table below canvas
+        function updateCentroidStatsTable() {
+            const statsContainer = document.getElementById('centroids-stats');
+            statsContainer.innerHTML = '';
+
+            const unit = themeDetails[currentTheme].unit;
+            const isInitialState = currentStep === 0 && points.every(p => p.cluster === -1);
+
+            centroids.forEach((c, idx) => {
+                const assignedPoints = points.filter(p => p.cluster === c.id);
+                const totalValue = assignedPoints.reduce((acc, p) => acc + p.value, 0);
+
+                const card = document.createElement('div');
+                card.className = "p-4 border border-slate-100 rounded-2xl bg-slate-50 flex flex-col gap-1 border-t-4 shadow-sm";
+                card.style.borderTopColor = c.color;
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-extrabold text-slate-900">${isInitialState ? `중심 후보 ${c.id + 1}` : `제 ${c.id + 1} 시설 후보`}</span>
+                        <span class="px-2 py-0.5 rounded-full text-[9px] font-bold text-white" style="background-color: ${c.color}">
+                            ${isInitialState ? '아직 묶지 않음' : `주변 장소 ${assignedPoints.length}곳`}
+                        </span>
+                    </div>
+                    <div class="text-xs text-slate-500 font-medium mt-1">
+                        중심 좌표: <b class="text-slate-800 font-bold">(${c.x}, ${c.y})</b>
+                    </div>
+                    ${isInitialState
+                        ? '<div class="text-[10px] text-slate-400 mt-1">한 단계 실행 후 이 중심에 속한 장소를 보여드려요.</div>'
+                        : `<div class="text-[10px] text-slate-400 mt-1">참고 수요 합계: <strong class="text-indigo-600 font-extrabold">${totalValue.toLocaleString()}${unit}</strong></div>`}
+                `;
+                statsContainer.appendChild(card);
+            });
+
+            if (centroids.length === 0) {
+                statsContainer.innerHTML = `
+                    <div class="col-span-full text-center py-4 text-xs text-slate-400">
+                        오른쪽 가상 화면에서 [한 단계씩 실행]을 눌러 데이터를 분류해 보세요.
+                    </div>
+                `;
+            }
+        }
+
+        // Window onload entry point
+        window.onload = function() {
+            init();
+        }
+    </script>
+</body>
+</html>
