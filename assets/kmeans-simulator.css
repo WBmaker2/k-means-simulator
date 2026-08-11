@@ -590,6 +590,48 @@ body.site-shell {
 .map-card > div:first-child { align-items: flex-start; }
 .map-card > div:first-child > span:first-child { color: var(--ink) !important; font-size: .88rem !important; }
 .map-card > div:first-child > span:first-child small { display: block; margin-top: .1rem; color: var(--muted); font-size: .68rem; font-weight: 500; }
+.map-observation-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .85rem;
+    width: 100%;
+    margin: .35rem 0 .75rem;
+    padding: .75rem .8rem;
+    border: 1px solid #c8e9f7;
+    border-radius: .95rem;
+    background: #f3fbff;
+}
+.map-observation-copy {
+    display: flex;
+    flex: 0 1 14rem;
+    min-width: 10rem;
+    max-width: 15rem;
+    flex-direction: column;
+    gap: .12rem;
+}
+.map-observation-kicker { color: var(--ink); font-size: .78rem; font-weight: 800; }
+.map-observation-hint { color: var(--muted); font-size: .7rem; line-height: 1.4; }
+.map-observation-actions {
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: .45rem;
+}
+.map-observation-actions .primary-action {
+    min-height: 2.8rem;
+    min-width: 11rem;
+}
+.map-secondary-action {
+    min-height: 2.8rem;
+    border-color: var(--line) !important;
+    border-radius: .8rem !important;
+    background: #fff !important;
+    color: var(--ink-soft) !important;
+}
+.map-secondary-action:hover { background: #e9f4fb !important; color: var(--primary-dark) !important; }
+.map-observation-toolbar + .exploration-canvas { margin-top: 0; }
 .exploration-canvas {
     min-height: 300px;
     border: 5px solid #fff !important;
@@ -648,6 +690,11 @@ body.site-shell {
     .grid.grid-cols-2 > button { grid-column: auto !important; width: 100%; }
     .stage-summary { grid-template-columns: 1fr; }
     .exploration-canvas { min-height: 210px; border-width: 3px !important; }
+    .map-observation-toolbar { align-items: stretch; flex-direction: column; }
+    .map-observation-copy { min-width: 0; }
+    .map-observation-actions { justify-content: stretch; }
+    .map-observation-actions > button { flex: 1 1 auto; }
+    .map-observation-actions .primary-action { min-width: 0; }
     .map-card > div:first-child > span:nth-child(2), .map-card > div:first-child > span:nth-child(3) { font-size: .66rem; }
     .entry-guide-card { order: 3; }
 }
