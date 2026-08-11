@@ -112,19 +112,6 @@
                     </div>
                 </div>
 
-                <!-- Simulation Buttons -->
-                <div class="grid grid-cols-2 gap-2">
-                    <button onclick="stepSimulation()" class="primary-action col-span-2 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition flex items-center justify-center gap-1.5 shadow-md">
-                        <i data-lucide="skip-forward" class="w-4 h-4"></i> 한 단계씩 실행
-                    </button>
-                    <button onclick="startSimulation()" class="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border border-slate-200">
-                        <i data-lucide="play" class="w-3.5 h-3.5"></i> 자동으로 끝까지 보기
-                    </button>
-                    <button onclick="resetSimulation()" class="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border border-slate-200">
-                        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> 초기화
-                    </button>
-                </div>
-
                 <!-- Status Progress Timeline -->
                 <div class="mt-4 pt-3 border-t border-slate-100">
                     <span class="text-xs font-bold text-slate-500 block uppercase mb-2">알고리즘 진행 현황</span>
@@ -224,6 +211,24 @@
                     <span><b class="text-slate-700">● ■ ◆ ▲ ✚ ⬡</b> 모둠별 장소 점</span>
                     <span><b class="text-indigo-600">◆</b> 중심 후보</span>
                     <span><b class="text-slate-700">┄</b> 같은 모둠까지의 거리</span>
+                </div>
+
+                <div class="map-observation-toolbar" role="group" aria-label="지도 관찰 조작">
+                    <div class="map-observation-copy">
+                        <span class="map-observation-kicker">지도를 보며 한 단계씩</span>
+                        <span class="map-observation-hint">버튼을 누른 뒤 색 점과 중심 후보의 변화를 살펴보세요.</span>
+                    </div>
+                    <div class="map-observation-actions">
+                        <button id="map-step-button" data-observe-action="step" onclick="stepSimulation()" class="primary-action py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition flex items-center justify-center gap-1.5 shadow-md">
+                            <i data-lucide="skip-forward" class="w-4 h-4"></i> 한 단계씩 실행
+                        </button>
+                        <button onclick="startSimulation()" class="map-secondary-action py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border border-slate-200">
+                            <i data-lucide="play" class="w-3.5 h-3.5"></i> 자동으로 끝까지 보기
+                        </button>
+                        <button onclick="resetSimulation()" class="map-secondary-action py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border border-slate-200">
+                            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> 초기화
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Simulation Canvas (Coordinate Area) -->
